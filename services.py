@@ -112,6 +112,18 @@ def handle_questionnaire(message):
         else:
             logging.info("All questions have been asked.")
             user_states.pop(phone_number)
+            
+def verify():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if mode == "subscribe" and token == WEBHOOKVERIFYTOKEN:
+        print("Webhook verified successfully!")
+        return challenge, 200
+    else:
+        return "Forbidden", 403    
+
 
 def process_message(message):
     handle_questionnaire(message)
