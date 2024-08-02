@@ -74,10 +74,8 @@ def handle_questionnaire(message):
 
     # Extract text or button reply from the message
     if 'text' in message:
-        print("1")
         text = message['text'].get('body')
     if 'button' in message:
-        print("3")
         text = message['button'].get('payload') 
     else:
         logging.warning("No recognizable message content found")
@@ -86,14 +84,14 @@ def handle_questionnaire(message):
     if phone_number not in user_states:
         user_states[phone_number] = -1  # Start at -1 to check the template response
 
-    # Check if the response to the template is "Qyes" to start the questionnaire
+    # Check if the response to the template is "yes" to start the questionnaire
     if user_states[phone_number] == -1:
-        if text == "Qyes":  # Check if the response is "Qyes"
+        if text == "yes":  # Check if the response is "yes"
             user_states[phone_number] = 0
             first_question = questions[0]['question']
             send_message(phone_number, first_question)
         else:
-            # If the response is not "Qyes", keep the state at -1 and do not start the questionnaire
+            # If the response is not "yes", keep the state at -1 and do not start the questionnaire
             return
 
     # If the user is already in the questionnaire and has responded, process the response
