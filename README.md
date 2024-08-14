@@ -55,18 +55,22 @@ In the Meta App Dashboard, go to WhatsApp > Configuration, then click the Edit b
 To start the questionnaire, send a GET request to the following endpoint, replacing <phone_number> with the recipient's phone number:
 
 ```
-http://localhost:8000/start_questionnaire?phone_number=351910134981
+http://localhost:8000/start_questionnaire?phone_number=<phone_number>
 ```
+This will send the initial template message to the specified phone number, prompting the user to start the questionnaire.
+
 ### Collecting Responses
 
-The responses will be processed and recorded in the responses.log file in the following format:
+Responses will be processed and saved in individual log files named responses_<phone_number>.log. Each file contains the questions and corresponding answers from the user. The format of each log entry is as follows:
 
 ```
-question: answer
+Question <number>: <question_text>
+Answer: <user_response>
 ```
+### Viewing Responses
+You can view a user's responses by opening their corresponding log file in the project directory. The log file is named using the user's phone number, e.g., responses_<phone_number>.log.
 
-The questions and answers will be logged in this file for easy reference and analysis.
-
+These logs allow you to easily reference and analyze the responses provided by each user.
 
 
 
