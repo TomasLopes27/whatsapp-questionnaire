@@ -1,6 +1,5 @@
 import os, requests, json, logging, questions_mock, settings
 from flask import request
-import pdb;
 
 # Configure logging to file
 logging.basicConfig(
@@ -8,7 +7,7 @@ logging.basicConfig(
     format='%(asctime)s - %(message)s',
     handlers=[
         logging.FileHandler("responses.log"),  # Output file for logs
-        logging.StreamHandler()  # Output logs to console as well
+        logging.StreamHandler()  # Output logs to console
     ]
 )
 
@@ -144,7 +143,7 @@ def handle_questionnaire(phone_number,text):
             logging.info("All questions have been asked.")
             send_message(phone_number, "Thank you for completing the questionnaire!")
 
-#Send the question to the user
+# Send the question to the user
 def send_question(phone_number, question_index):
     question = questions[question_index]['question']
     category = questions[question_index].get('category')
