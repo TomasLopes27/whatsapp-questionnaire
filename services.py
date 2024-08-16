@@ -1,16 +1,5 @@
-import os
-import requests
-import json
-import questions_mock
-import logging
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv(dotenv_path='example.env')
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
-VERSION = os.getenv("VERSION")
-WEBHOOKVERIFYTOKEN = os.getenv("VERIFY_TOKEN") 
+import os, requests, json, logging, questions_mock, settings
+from flask import request
 
 # Configure logging to file
 logging.basicConfig(
@@ -18,37 +7,70 @@ logging.basicConfig(
     format='%(asctime)s - %(message)s',
     handlers=[
         logging.FileHandler("responses.log"),  # Output file for logs
-        logging.StreamHandler()  # Output logs to console as well
+        logging.StreamHandler()  # Output logs to console
     ]
 )
 
-def send_whatsapp_template_message(phone_number):
-    url = f"https://graph.facebook.com/{VERSION}/{PHONE_NUMBER_ID}/messages"
+def send_whatsapp_template_message(phone_number, name):
+    url = f"https://graph.facebook.com/{settings.VERSION}/{settings.PHONE_NUMBER_ID}/messages"
     headers = {
-        "Authorization": "Bearer " + ACCESS_TOKEN,
+        "Authorization": "Bearer " + settings.ACCESS_TOKEN,
         "Content-Type": "application/json",
     }
     data = {
         "messaging_product": "whatsapp",
         "to": phone_number,
         "type": "template",
-        "template": {"name": "questionary", "language": {"code": "en"}},
+        "template": {"name": name, "language": {"code": "en"}},
     }
     response = requests.post(url, headers=headers, json=data)
+    
     return response
 
 def send_message(recipient, text):
     data = get_text_message_input(recipient, text)
     headers = {
         "Content-type": "application/json",
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Authorization": f"Bearer " + settings.ACCESS_TOKEN,
     }
-    url = f"https://graph.facebook.com/{VERSION}/{PHONE_NUMBER_ID}/messages"
-    # response = requests.post(url, data=data, headers=headers)
-    #if response.status_code == 200:
-    #    print("Body:", response.text)
-    #else:
-    #    print(response.text)
+    url = f"https://graph.facebook.com/{settings.VERSION}/{settings.PHONE_NUMBER_ID}/messages"
+
+    requests.post(url, data=data, headers=headers)
+
+    """
+    if response.status_code == 200:
+        print("Body:", response.text)
+    else:
+        print(response.text)
+    """    
+
+def send_interactive_message(phone_number, question, buttons):
+    url = f"https://graph.facebook.com/{settings.VERSION}/{settings.PHONE_NUMBER_ID}/messages"
+    
+    headers = {
+        "Authorization": "Bearer " + settings.ACCESS_TOKEN,
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": phone_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {
+                "text": question
+            },
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": button} for button in buttons
+                ]
+            }
+        }
+    }   
+
+    requests.post(url, headers=headers, json=data)
 
 # Format the text message in JSON to send via API
 def get_text_message_input(recipient, text):
@@ -62,71 +84,89 @@ def get_text_message_input(recipient, text):
         }
     )
 
-# Dictionary to track the current state of each user, using the phone number as the key.
-user_states = {}
-
 questions = questions_mock.questions
 
-def handle_questionnaire(message):
-    phone_number = message.get('from')
-    text = None
+def write_response_to_file(phone_number, question_index, question, answer):
+    filename = f"responses_{phone_number}.log"
+    with open(filename, 'a') as file:
+        file.write(f"Question {question_index + 1}: {question}\nAnswer: {answer}\n")
 
+def print_status(status):
+    return logging.info(status)        
 
-    # Extract text or button reply from the message
-    if 'text' in message:
-        text = message['text'].get('body')
-    if 'button' in message:
-        text = message['button'].get('payload') 
-    else:
-        logging.warning("No recognizable message content found")
+def read_last_question_from_file(phone_number):
+    filename = f"responses_{phone_number}.log"
+    if not os.path.exists(filename):
+        return None
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+        for line in reversed(lines):
+            if line.startswith("Question "):
+                question_index = int(line.split(" ")[1].strip(":")) - 1
+                return question_index
+    return None
 
-    # Initialize user state if not existing
-    if phone_number not in user_states:
-        user_states[phone_number] = -1  # Start at -1 to check the template response
+def get_next_question_index(last_question_index):
+    if last_question_index is None:
+        return 0  # No questions have been asked yet
+    return last_question_index + 1
 
-    # Check if the response to the template is "yes" to start the questionnaire
-    if user_states[phone_number] == -1:
-        if text == "yes":  # Check if the response is "yes"
-            user_states[phone_number] = 0
-            first_question = questions[0]['question']
-            send_message(phone_number, first_question)
-        else:
-            # If the response is not "yes", keep the state at -1 and do not start the questionnaire
+def handle_questionnaire(phone_number,text):
+    last_question_index = read_last_question_from_file(phone_number)
+
+    # If starting questionnaire, verify if the user says "yes" or "no"
+    if last_question_index is None:
+        if text.lower() == "yes":
+            send_question(phone_number,0)
+            return
+        elif text.lower() == "no":
             return
 
-    # If the user is already in the questionnaire and has responded, process the response
-    elif text is not None:
-        current_question_index = user_states[phone_number]
+    # Handles the case where the server restarts and continues the questionnaire from the last saved point   
+    if last_question_index is not None:
+        if text.lower() == "yes":
+            next_question_index = get_next_question_index(last_question_index)
+            send_question(phone_number,next_question_index)
+            return    
+    
+    next_question_index = get_next_question_index(last_question_index)
 
-        # Log the user's response and send the next question, if available
-        if current_question_index >= 0 and current_question_index < len(questions):
-            question = questions[current_question_index]['question']
-            logging.info(f"Question: {question}, Answer: {text}")
-            user_states[phone_number] += 1
+    # If already in questionnaire
+    if next_question_index < len(questions):
+        current_question = questions[next_question_index]['question']
 
-        if user_states[phone_number] < len(questions):
-            next_question = questions[user_states[phone_number]]['question']
-            send_message(phone_number, next_question)
+        write_response_to_file(phone_number, next_question_index, current_question, text)
+
+        if next_question_index + 1 < len(questions):
+            send_question(phone_number,next_question_index + 1)
         else:
             logging.info("All questions have been asked.")
-            user_states.pop(phone_number)
-            
-def verify():
+            send_message(phone_number, "Thank you for completing the questionnaire!")
+
+# Send the question to the user
+def send_question(phone_number, question_index):
+    question = questions[question_index]['question']
+    category = questions[question_index].get('category')
+
+    if category == "interactive":
+        buttons = questions[question_index].get('buttons', [])
+        send_interactive_message(phone_number, question, buttons)
+    elif category == "text":
+        send_message(phone_number, question)            
+        
+def isVerify():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
-    if mode == "subscribe" and token == WEBHOOKVERIFYTOKEN:
-        print("Webhook verified successfully!")
-        return challenge, 200
+    if mode == "subscribe" and token == settings.WEBHOOKVERIFYTOKEN:
+        logging.info("Webhook verified successfully!")
+        return True, challenge
     else:
-        return "Forbidden", 403    
-
+        return False, None
 
 def process_message(message):
     handle_questionnaire(message)
 
 def start_questionnaire(phone_number):
-    if phone_number not in user_states:
-        user_states[phone_number] = -1
-    send_whatsapp_template_message(phone_number)
+    send_whatsapp_template_message(phone_number,"questionary")
