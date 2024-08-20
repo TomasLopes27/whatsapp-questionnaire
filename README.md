@@ -8,6 +8,7 @@ This project sets up a Flask server to send questionnaires and receive responses
 ### Requirements
 
 `pip install -r requirements.txt`
+`pip install -r devrequirements.txt`
 
 ### Installation
 
