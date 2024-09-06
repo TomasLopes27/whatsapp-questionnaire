@@ -56,7 +56,7 @@ In the Meta App Dashboard, go to WhatsApp > Configuration, then click the Edit b
 To start the questionnaire, send a GET request to the following endpoint, replacing <phone_number> with the recipient's phone number:
 
 ```
-http://localhost:8000/start_questionnaire?phone_number=351910134981
+http://localhost:8000/start_questionnaire?phone_number=<phone_number>
 ```
 ### Collecting Responses
 
